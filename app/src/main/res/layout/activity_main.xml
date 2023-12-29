@@ -56,7 +56,7 @@
             android:layout_height="match_parent"
             android:fontFamily="@font/lato_regular"
             android:inputType="none"
-            android:text="Choose Categorie"
+            android:text="Choose Category"
             android:dropDownVerticalOffset="10dp"
             android:dropDownWidth="match_parent"
             app:popupTheme="@style/DropDownItemStyle"
