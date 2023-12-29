@@ -76,7 +76,6 @@ class MainActivity : AppCompatActivity() {
         val autoCompleteTextView = chooseCategoryBinding.listOfCat
         autoCompleteTextView.setAdapter(adapter)
 
-        // Set up onClickListener for the ImageView to choose an image
         chooseCategoryBinding.userProfileImage.setOnClickListener {
             pickImageFromGallery()
         }
@@ -108,6 +107,7 @@ class MainActivity : AppCompatActivity() {
                     if (task.isSuccessful) {
                         // The uri variable now contains the download URL
                         val downloadUrl = task.result.toString()
+
 
 
                         databaseReference.child(division).child(chooseCategoryBinding.EditName.text.toString())
