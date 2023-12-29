@@ -56,6 +56,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.2.2"))
     //database
     implementation("com.google.firebase:firebase-database-ktx:20.3.0")
+    implementation("com.google.firebase:firebase-storage")
     //prog bar
     //  implementation ("com.ramijemli.percentagechartview:percentagechartview:1.3.4")
     implementation ("com.github.ismaeldivita:chip-navigation-bar:1.4.0")

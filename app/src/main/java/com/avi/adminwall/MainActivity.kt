@@ -2,6 +2,7 @@ package com.avi.adminwall
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.widget.ArrayAdapter
@@ -19,6 +20,8 @@ import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.ktx.app
 import com.google.firebase.ktx.initialize
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageReference
 
 class MainActivity : AppCompatActivity() {
     private lateinit var chooseCategoryBinding: ActivityMainBinding
@@ -28,12 +31,14 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var division: String
     private lateinit var imageUri:String
+    private  lateinit var storageRef:StorageReference
 
     private var options = FirebaseOptions.Builder()
         .setProjectId("infinity-walls")
         .setApplicationId("1:355548059361:android:7bf635a2d582f5cb32c9a0")
         .setApiKey("AIzaSyBdNm-G_5Xh3oZ-Q9ulUPjYD5sqBkB01zU")
         .setDatabaseUrl("https://infinity-walls-default-rtdb.firebaseio.com/")
+        .setStorageBucket("infinity-walls.appspot.com")
         .build()
 
     // Use ActivityResultContracts to handle image selection
@@ -60,6 +65,7 @@ class MainActivity : AppCompatActivity() {
 
         firebaseInstance = FirebaseDatabase.getInstance(second)
         databaseReference = firebaseInstance.getReference("Category")
+        storageRef = FirebaseStorage.getInstance(second).reference.child(ConstantData.CATEGORY.category)
 
         // Set up the category list dropdown
         val categoryList = arrayOf(
@@ -79,27 +85,51 @@ class MainActivity : AppCompatActivity() {
             division = autoCompleteTextView.text.toString()
             if (division == "Choose Category") {
                 Toast.makeText(applicationContext, "Select category", Toast.LENGTH_SHORT).show()
-            }
-            else if(imageUri.isEmpty())
-            {
+            } else if (imageUri.isEmpty()) {
                 Toast.makeText(applicationContext, "Select Image", Toast.LENGTH_SHORT).show()
-            }
-            else if(chooseCategoryBinding.EditName.text.toString().isEmpty())
-            {
-                Toast.makeText(applicationContext,"Set a name",Toast.LENGTH_SHORT).show()
-            }
-            else {
-                databaseReference.child(division).
-                child(chooseCategoryBinding.EditName.text.toString())
-                    .push().setValue(imageUri)
-                    .addOnSuccessListener {
-                        Log.d("Data",imageUri+" added successfully")
+            } else if (chooseCategoryBinding.EditName.text.toString().isEmpty()) {
+                Toast.makeText(applicationContext, "Set a name", Toast.LENGTH_SHORT).show()
+            } else {
+                // Create a reference to the image file in Firebase Storage
+                val imageRef = storageRef.child(division).child(chooseCategoryBinding.EditName.text.toString()+System.currentTimeMillis())
+
+                // Upload the file to Firebase Storage
+                val uploadTask = imageRef.putFile(Uri.parse(imageUri))
+
+                // Register observers to listen for when the download is done or if it fails
+                uploadTask.continueWithTask { task ->
+                    if (!task.isSuccessful) {
+                        task.exception?.let {
+                            throw it
+                        }
                     }
+                    imageRef.downloadUrl
+                }.addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        // The uri variable now contains the download URL
+                        val downloadUrl = task.result.toString()
 
-                Toast.makeText(applicationContext,"Select category",Toast.LENGTH_SHORT).show()
-
+                        // Now, you can save this download URL to the Realtime Database or perform any other necessary tasks
+                        databaseReference.child(division).child(chooseCategoryBinding.EditName.text.toString())
+                            .push()
+                            .setValue(downloadUrl)
+                            .addOnSuccessListener {
+                                Log.d("Data", "$downloadUrl added successfully")
+                                Toast.makeText(applicationContext, "Image added successfully", Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e("Data", "Error adding data: ${e.message}", e)
+                                Toast.makeText(applicationContext, "Error adding data: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                    } else {
+                        // Handle failures
+                        Log.e("Firebase", "Error uploading image: ${task.exception?.message}", task.exception)
+                        Toast.makeText(applicationContext, "Error uploading image: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
+
     }
 
     private fun pickImageFromGallery() {
