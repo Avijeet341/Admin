@@ -93,10 +93,10 @@ class MainActivity : AppCompatActivity() {
                 // Create a reference to the image file in Firebase Storage
                 val imageRef = storageRef.child(division).child(chooseCategoryBinding.EditName.text.toString()+System.currentTimeMillis())
 
-                // Upload the file to Firebase Storage
+
                 val uploadTask = imageRef.putFile(Uri.parse(imageUri))
 
-                // Register observers to listen for when the download is done or if it fails
+
                 uploadTask.continueWithTask { task ->
                     if (!task.isSuccessful) {
                         task.exception?.let {
@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
                         // The uri variable now contains the download URL
                         val downloadUrl = task.result.toString()
 
-                        // Now, you can save this download URL to the Realtime Database or perform any other necessary tasks
+
                         databaseReference.child(division).child(chooseCategoryBinding.EditName.text.toString())
                             .push()
                             .setValue(downloadUrl)
@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
                                 Toast.makeText(applicationContext, "Error adding data: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                     } else {
-                        // Handle failures
+
                         Log.e("Firebase", "Error uploading image: ${task.exception?.message}", task.exception)
                         Toast.makeText(applicationContext, "Error uploading image: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
                     }
