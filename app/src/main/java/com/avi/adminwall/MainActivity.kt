@@ -2,6 +2,7 @@ package com.avi.adminwall
 
 import android.app.Activity
 import android.content.Intent
+import android.media.Image
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -14,8 +15,12 @@ import com.avi.adminwall.databinding.ActivityMainBinding
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.database.ChildEventListener
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.GenericTypeIndicator
+import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.ktx.app
@@ -41,13 +46,12 @@ class MainActivity : AppCompatActivity() {
         .setStorageBucket("infinity-walls.appspot.com")
         .build()
 
-    // Use ActivityResultContracts to handle image selection
     private val getContent =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result: ActivityResult ->
             if (result.resultCode == Activity.RESULT_OK) {
                 // Handle the selected image
                 val selectedImageUri = result.data?.data
-                // Do something with the selected image URI, e.g., set it to the ImageView
+
                 chooseCategoryBinding.userProfileImage.setImageURI(selectedImageUri)
                 imageUri = selectedImageUri.toString()
                 Toast.makeText(this, "Image selected", Toast.LENGTH_SHORT).show()
@@ -67,21 +71,19 @@ class MainActivity : AppCompatActivity() {
         databaseReference = firebaseInstance.getReference("Category")
         storageRef = FirebaseStorage.getInstance(second).reference.child(ConstantData.CATEGORY.category)
 
-        // Set up the category list dropdown
         val categoryList = arrayOf(
             "Ai", "Abstract", "Amoled", "Anime", "Exclusive", "Games", "Minimal",
             "Nature", "Shapes", "Shows", "Sports", "Stock", "Superheroes"
         )
         val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, categoryList)
-        val autoCompleteTextView = chooseCategoryBinding.listOfCat
-        autoCompleteTextView.setAdapter(adapter)
+        chooseCategoryBinding.listOfCat.setAdapter(adapter)
 
         chooseCategoryBinding.userProfileImage.setOnClickListener {
             pickImageFromGallery()
         }
 
         chooseCategoryBinding.buttonPush.setOnClickListener {
-            division = autoCompleteTextView.text.toString()
+            division = chooseCategoryBinding.listOfCat.text.toString()
             if (division == "Choose Category") {
                 Toast.makeText(applicationContext, "Select category", Toast.LENGTH_SHORT).show()
             } else if (imageUri.isEmpty()) {
@@ -89,48 +91,94 @@ class MainActivity : AppCompatActivity() {
             } else if (chooseCategoryBinding.EditName.text.toString().isEmpty()) {
                 Toast.makeText(applicationContext, "Set a name", Toast.LENGTH_SHORT).show()
             } else {
-                // Create a reference to the image file in Firebase Storage
-                val imageRef = storageRef.child(division).child(chooseCategoryBinding.EditName.text.toString()+System.currentTimeMillis())
 
+                databaseReference.child(division).child(chooseCategoryBinding.EditName.text.toString())
+                    .addListenerForSingleValueEvent(object : ValueEventListener {
+                        override fun onDataChange(snapshot: DataSnapshot) {
+                            var isPresent:Boolean = false
+                            for(s in snapshot.children)
+                            {
+                                    val img:String = s.value.toString()
+                                    if(img == imageUri)
+                                    {
+                                        isPresent = true
 
-                val uploadTask = imageRef.putFile(Uri.parse(imageUri))
+                                        break
+                                    }
+                            }
+                            if (!isPresent) {
+                                uploadImage()
 
+                            } else {
 
-                uploadTask.continueWithTask { task ->
-                    if (!task.isSuccessful) {
-                        task.exception?.let {
-                            throw it
+                                Toast.makeText(
+                                    applicationContext,
+                                    "This image already uploaded in this category",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
-                    }
-                    imageRef.downloadUrl
-                }.addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        // The uri variable now contains the download URL
-                        val downloadUrl = task.result.toString()
 
-
-
-                        databaseReference.child(division).child(chooseCategoryBinding.EditName.text.toString())
-                            .push()
-                            .setValue(downloadUrl)
-                            .addOnSuccessListener {
-                                Log.d("Data", "$downloadUrl added successfully")
-                                Toast.makeText(applicationContext, "Image added successfully", Toast.LENGTH_SHORT).show()
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e("Data", "Error adding data: ${e.message}", e)
-                                Toast.makeText(applicationContext, "Error adding data: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                    } else {
-
-                        Log.e("Firebase", "Error uploading image: ${task.exception?.message}", task.exception)
-                        Toast.makeText(applicationContext, "Error uploading image: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
-                    }
-                }
+                        override fun onCancelled(error: DatabaseError) {
+                            Log.e("Firebase", "Database error: ${error.message}", error.toException())
+                        }
+                    })
             }
         }
 
+
+
     }
+
+    private fun uploadImage() {
+        val imageRef = storageRef.child(division)
+            .child("${chooseCategoryBinding.EditName.text.toString()}${System.currentTimeMillis()}")
+
+        val uploadTask = imageRef.putFile(Uri.parse(imageUri))
+
+        uploadTask.continueWithTask { task ->
+            if (!task.isSuccessful) {
+                task.exception?.let {
+                    throw it
+                }
+            }
+            imageRef.downloadUrl
+        }.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val downloadUrl = task.result.toString()
+
+                val imgData = ImageUri(imageUri, downloadUrl)
+
+                databaseReference.child(division)
+                    .child(chooseCategoryBinding.EditName.text.toString())
+                    .setValue(imgData)
+                    .addOnSuccessListener {
+                        Log.d("Data", "$downloadUrl added successfully")
+                        Toast.makeText(
+                            applicationContext,
+                            "Image added successfully",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Data", "Error adding data: ${e.message}", e)
+                        Toast.makeText(
+                            applicationContext,
+                            "Error adding data: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+            } else {
+                Log.e("Firebase", "Error uploading image: ${task.exception?.message}", task.exception)
+                Toast.makeText(
+                    applicationContext,
+                    "Error uploading image: ${task.exception?.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
 
     private fun pickImageFromGallery() {
         val intent = Intent(Intent.ACTION_PICK)
