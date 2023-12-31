@@ -32,7 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var databaseReference: DatabaseReference
 
     private lateinit var division: String
-    private lateinit var imageUri:String
+    private  var imageUri:String = ""
     private  lateinit var storageRef:StorageReference
 
     private var options = FirebaseOptions.Builder()
@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(applicationContext, "Select category", Toast.LENGTH_SHORT).show()
             } else if (imageUri.isEmpty()) {
                 Toast.makeText(applicationContext, "Select Image", Toast.LENGTH_SHORT).show()
-            } else if (chooseCategoryBinding.EditName.text.toString().isEmpty()) {
+            } else if (chooseCategoryBinding.EditName.text.toString().trim().isEmpty()) {
                 Toast.makeText(applicationContext, "Set a name", Toast.LENGTH_SHORT).show()
             } else {
 
@@ -141,7 +141,7 @@ class MainActivity : AppCompatActivity() {
 
             private fun uploadImage(imageHash: String) {
         val imageRef = storageRef.child(division)
-            .child("${chooseCategoryBinding.EditName.text.toString()}${System.currentTimeMillis()}")
+            .child("${chooseCategoryBinding.EditName.text.toString().trim()}${System.currentTimeMillis()}")
 
         val uploadTask = imageRef.putFile(Uri.parse(imageUri))
 
@@ -176,7 +176,7 @@ class MainActivity : AppCompatActivity() {
     private fun saveImageMetadata(downloadUrl: String, imageHash: String) {
         val imgData = ImageData(downloadUrl, imageHash)
         databaseReference.child(division)
-            .child(chooseCategoryBinding.EditName.text.toString())
+            .child(chooseCategoryBinding.EditName.text.toString().trim())
             .push()
             .setValue(imgData)
     }
