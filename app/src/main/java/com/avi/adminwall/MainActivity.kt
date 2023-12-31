@@ -2,7 +2,6 @@ package com.avi.adminwall
 
 import android.app.Activity
 import android.content.Intent
-import android.media.Image
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -12,21 +11,19 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.avi.adminwall.databinding.ActivityMainBinding
-import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
-import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.GenericTypeIndicator
 import com.google.firebase.database.ValueEventListener
-import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.ktx.app
 import com.google.firebase.ktx.initialize
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageReference
+import java.io.InputStream
+import java.security.MessageDigest
 
 class MainActivity : AppCompatActivity() {
     private lateinit var chooseCategoryBinding: ActivityMainBinding
@@ -55,6 +52,7 @@ class MainActivity : AppCompatActivity() {
                 chooseCategoryBinding.userProfileImage.setImageURI(selectedImageUri)
                 imageUri = selectedImageUri.toString()
                 Toast.makeText(this, "Image selected", Toast.LENGTH_SHORT).show()
+//                checkIfImageAlreadyExists()
             }
         }
 
@@ -92,45 +90,56 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(applicationContext, "Set a name", Toast.LENGTH_SHORT).show()
             } else {
 
-                databaseReference.child(division).child(chooseCategoryBinding.EditName.text.toString())
-                    .addListenerForSingleValueEvent(object : ValueEventListener {
-                        override fun onDataChange(snapshot: DataSnapshot) {
-                            var isPresent:Boolean = false
-                            for(s in snapshot.children)
-                            {
-                                    val img:String = s.value.toString()
-                                    if(img == imageUri)
-                                    {
-                                        isPresent = true
-
-                                        break
-                                    }
-                            }
-                            if (!isPresent) {
-                                uploadImage()
-
-                            } else {
-
-                                Toast.makeText(
-                                    applicationContext,
-                                    "This image already uploaded in this category",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-
-                        override fun onCancelled(error: DatabaseError) {
-                            Log.e("Firebase", "Database error: ${error.message}", error.toException())
-                        }
-                    })
+              checkIfImageAlreadyExists()
             }
         }
 
 
 
     }
+    private fun checkIfImageAlreadyExists() {
+        val imageStream = contentResolver.openInputStream(Uri.parse(imageUri))
+        imageStream?.let {
+            val imageHash = computeHash(it)
 
-    private fun uploadImage() {
+            databaseReference.child(division)
+                .addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        var isPresent = false
+
+                        snapshot.children.forEach { category ->
+                            category.children.forEach { name ->
+                                name.children.forEach { unique ->
+                                    val uploadedImageHash = unique.value.toString()
+
+                                    if (uploadedImageHash == imageHash) {
+                                        isPresent = true
+                                        return@forEach
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!isPresent) {
+                            uploadImage(imageHash)
+                        } else {
+                            Toast.makeText(
+                                applicationContext,
+                                "This image already uploaded in this category",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+
+                    override fun onCancelled(error: DatabaseError) {
+                        Log.e("Firebase", "Database error: ${error.message}", error.toException())
+                    }
+                })
+        }
+    }
+
+
+            private fun uploadImage(imageHash: String) {
         val imageRef = storageRef.child(division)
             .child("${chooseCategoryBinding.EditName.text.toString()}${System.currentTimeMillis()}")
 
@@ -146,28 +155,13 @@ class MainActivity : AppCompatActivity() {
         }.addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 val downloadUrl = task.result.toString()
+                saveImageMetadata(downloadUrl, imageHash)
 
-                val imgData = ImageUri(imageUri, downloadUrl)
-
-                databaseReference.child(division)
-                    .child(chooseCategoryBinding.EditName.text.toString())
-                    .setValue(imgData)
-                    .addOnSuccessListener {
-                        Log.d("Data", "$downloadUrl added successfully")
-                        Toast.makeText(
-                            applicationContext,
-                            "Image added successfully",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("Data", "Error adding data: ${e.message}", e)
-                        Toast.makeText(
-                            applicationContext,
-                            "Error adding data: ${e.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+                Toast.makeText(
+                    applicationContext,
+                    "Image added successfully",
+                    Toast.LENGTH_SHORT
+                ).show()
             } else {
                 Log.e("Firebase", "Error uploading image: ${task.exception?.message}", task.exception)
                 Toast.makeText(
@@ -179,6 +173,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun saveImageMetadata(downloadUrl: String, imageHash: String) {
+        val imgData = ImageData(downloadUrl, imageHash)
+        databaseReference.child(division)
+            .child(chooseCategoryBinding.EditName.text.toString())
+            .push()
+            .setValue(imgData)
+    }
+
+    private fun computeHash(inputStream: InputStream): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        var read: Int
+        while (inputStream.read(buffer).also { read = it } > 0) {
+            digest.update(buffer, 0, read)
+        }
+        val hashedBytes = digest.digest()
+
+        return hashedBytes.joinToString("") { "%02x".format(it) }
+    }
 
     private fun pickImageFromGallery() {
         val intent = Intent(Intent.ACTION_PICK)
